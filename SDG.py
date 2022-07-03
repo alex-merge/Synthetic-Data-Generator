@@ -4,7 +4,7 @@ SDG (Synthetic Data Generator) class allows you to create data to try your
 scripts.
 
 @author: Alex-932
-@version : 0.2
+@version : 0.2.1
 """
 
 import numpy as np
@@ -17,13 +17,14 @@ class SDG():
     def __init__(self):
         "SDG allows you to create synthetic data through several methods."
         self.data = pd.DataFrame(columns = ["x", "y", "z", "tp", "track", 
-                                            "objID"], dtype = "float")
+                                            "objID", "target"], 
+                                 dtype = "float")
         self.objectID = 0
         self.track = 0
         self.objectTable = pd.DataFrame(columns = ["tp", "type", 
                                                    "origin", "radius"],
                                         dtype = "object")
-        self.version = "0.2"
+        self.version = "0.2.1"
         
     def toCartesian(radius, azimuth, elevation, origin = None):
         """
@@ -122,7 +123,7 @@ class SDG():
         self.objectID += 1
         self.track = max([track+1, self.track])
         
-    def rotatingSphere(self, origin = [0, 0, 0], radius = 10, nframe = 40, 
+    def rotatingSphere(self, origin = [0, 0, 0], radius = 10, nframe = 20, 
                        sample = 1000, tp = 0, azimuth = 15, elevation = 0):
         
         track = self.track
@@ -132,6 +133,8 @@ class SDG():
             objID = self.objectID
             self.addSphere(frame+tp, origin, radius, track, sample)
             pointsID = self.data[self.data["objID"] == objID].index
+            prevID = self.data[self.data["objID"] == objID-1].index
+            self.data.loc[prevID, "target"] = list(pointsID)
             for point in pointsID:
                 cvalues = self.data.loc[point]
                 svalues = list(SDG.toSpherical(cvalues["x"], cvalues["y"], 
@@ -166,9 +169,13 @@ class SDG():
         plt.close()
         
     def exportCSV(self, savepath, OAT = True):
-        pass
         if OAT :
-            self.data.to_csv
+            data = self.data.copy()
+            data.rename(columns = {"track" : "TRACK_ID", "x": "X", "y":"Y", 
+                                   "z" : "Z", "tp": "EDGE_TIME", 
+                                   "target": "TARGET"}, 
+                        inplace = True)
+            data.to_csv(savepath)
         
 if __name__ == "__main__":
     t = SDG()
