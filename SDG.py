@@ -4,7 +4,7 @@ SDG (Synthetic Data Generator) class allows you to create data to try your
 scripts.
 
 @author: Alex-932
-@version : 0.2.1
+@version : 0.2.2
 """
 
 import numpy as np
@@ -24,7 +24,7 @@ class SDG():
         self.objectTable = pd.DataFrame(columns = ["tp", "type", 
                                                    "origin", "radius"],
                                         dtype = "object")
-        self.version = "0.2.1"
+        self.version = "0.2.2"
         
     def toCartesian(radius, azimuth, elevation, origin = None):
         """
@@ -129,6 +129,10 @@ class SDG():
         track = self.track
         self.addSphere(tp, origin, radius, track, sample)
         
+        # Converting degree to radian
+        azimuth = azimuth*np.pi/180
+        elevation = elevation*np.pi/180
+        
         for frame in range(1, nframe):
             objID = self.objectID
             self.addSphere(frame+tp, origin, radius, track, sample)
@@ -144,7 +148,7 @@ class SDG():
                 self.data.loc[point, ["x", "y", "z"]] = list(SDG.toCartesian(
                     svalues[0], svalues[1], svalues[2], origin))
         
-    def showData(self, TP):
+    def showData(self, TP = "all", tracks = "all", limits = None):
         """
         Show the points for the given time point.
 
@@ -156,15 +160,35 @@ class SDG():
         """
         if TP == "all" :
             for tp in self.data["tp"].value_counts().index.sort_values() :
-                self.showData(tp)
+                self.showData(tp, tracks)
             return None
+        
+        if type(tracks) in [int, float]:
+            tracks = [tracks]
+        
+        if limits == None:
+            lim = pd.Series([self.data["x"].min()-5, self.data["x"].max()+5,
+                             self.data["y"].min()-5, self.data["y"].max()+5,
+                             self.data["z"].min()-5, self.data["z"].max()+5],
+                            index = ["xm", "xM", "ym", "yM", "zm", "zM"],
+                            dtype = "float")
+        
         data = self.data[self.data["tp"] == TP]
+        
+        if tracks != "all":
+            data = data[data["track"].isin(tracks)]
+        
         fig = plt.figure()
         ax = fig.add_subplot(projection='3d')
         ax.scatter(data["x"], data["y"], data["z"])
         ax.set_xlabel('X')
         ax.set_ylabel('Y')
         ax.set_zlabel('Z')
+        
+        ax.set_xlim3d([lim["xm"], lim["xM"]])
+        ax.set_ylim3d([lim["ym"], lim["yM"]])
+        ax.set_zlim3d([lim["zm"], lim["zM"]])
+
         plt.show()
         plt.close()
         
