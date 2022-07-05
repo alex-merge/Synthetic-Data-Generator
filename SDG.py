@@ -4,13 +4,14 @@ SDG (Synthetic Data Generator) class allows you to create data to try your
 scripts.
 
 @author: Alex-932
-@version : 0.2.2
+@version : 0.2.3
 """
 
 import numpy as np
 import pandas as pd
 # from random import randrange
 import matplotlib.pyplot as plt
+import tifffile
 
 class SDG():
     
@@ -24,7 +25,7 @@ class SDG():
         self.objectTable = pd.DataFrame(columns = ["tp", "type", 
                                                    "origin", "radius"],
                                         dtype = "object")
-        self.version = "0.2.2"
+        self.version = "0.2.3"
         
     def toCartesian(radius, azimuth, elevation, origin = None):
         """
@@ -123,9 +124,10 @@ class SDG():
         self.objectID += 1
         self.track = max([track+1, self.track])
         
-    def rotatingSphere(self, origin = [0, 0, 0], radius = 10, nframe = 20, 
+    def addRotatingSphere(self, origin = [0, 0, 0], radius = 10, nframe = 20, 
                        sample = 1000, tp = 0, azimuth = 15, elevation = 0):
         
+        # Saving the first track ID and creating the first sphere.
         track = self.track
         self.addSphere(tp, origin, radius, track, sample)
         
@@ -133,58 +135,168 @@ class SDG():
         azimuth = azimuth*np.pi/180
         elevation = elevation*np.pi/180
         
+        # Creating as much sphere as asked with nframe.
         for frame in range(1, nframe):
+            
+            # Temporarily saving the objectID the sphere will have.
             objID = self.objectID
+            
+            # Creating the sphere at the correct time point.
             self.addSphere(frame+tp, origin, radius, track, sample)
+            
+            # Getting the IDs of the current sphere's first point and previous
+            # sphere's first point.
             pointsID = self.data[self.data["objID"] == objID].index
             prevID = self.data[self.data["objID"] == objID-1].index
-            self.data.loc[prevID, "target"] = list(pointsID)
+            
+            # Adding the ID of the current sphere's spots to the previous 
+            # sphere's spots. That way we establish a link.  
+            self.data.loc[prevID, "target"] = list(pointsID.astype("int"))
+            
+            # Iterating through the points of the current sphere.
             for point in pointsID:
+                
+                # Getting the cartesian coordinates.
                 cvalues = self.data.loc[point]
+                
+                # Converting them to spherical.
                 svalues = list(SDG.toSpherical(cvalues["x"], cvalues["y"], 
                                 cvalues["z"], origin))
+                
+                # Adding the angle displacement.
                 svalues[1] += frame*azimuth
                 svalues[2] += frame*elevation
+                
+                # Converting them back and saving them in the data dataframe.
                 self.data.loc[point, ["x", "y", "z"]] = list(SDG.toCartesian(
                     svalues[0], svalues[1], svalues[2], origin))
+                
+    def fakeTif(self, savepath):
+        TP = self.data["tp"].value_counts(ascending = True).index
+        array = np.zeros((int(self.data["x"].max()+5),
+                          int(self.data["y"].max()+5),
+                          int(self.data["z"].max()+5)))
+        for tp in TP:
+            filename = "synth_"+str(int(tp))+".tif"
+            tifffile.imwrite(savepath+"\\"+filename, 
+                             array, metadata={'axes': 'ZYX'})
         
     def showData(self, TP = "all", tracks = "all", limits = None):
         """
-        Show the points for the given time point.
+        Show the path that the given track(s) are taking in 3D.
 
         Parameters
         ----------
-        TP : int
-            Time point.
+        TP : float, int or list, optional
+            ID of the time points to show. The default is "all". 
+        track : float, int or list, optional
+            ID of the track(s) to show. The default is "all".
+        limits : list, optional
+            List of the limits. The default is None.
+            Format : [x_min, x_max, y_min, y_max, z_min, z_max]
 
         """
+        
+        # Creating the figure and the axes.
+        fig = plt.figure()
+        ax = fig.add_subplot(projection='3d')
+        
+        # Setting iteration through time points if multiple ones.
         if TP == "all" :
             for tp in self.data["tp"].value_counts().index.sort_values() :
-                self.showData(tp, tracks)
+                self.showData(tp, tracks, limits)
+            return None
+        if type(TP) == list :
+            for tp in TP :
+                self.showData(tp, tracks, limits)
             return None
         
+        # Setting track as a list if only one is wished.
         if type(tracks) in [int, float]:
             tracks = [tracks]
         
+        # Setting the limits of the figure.
         if limits == None:
             lim = pd.Series([self.data["x"].min()-5, self.data["x"].max()+5,
                              self.data["y"].min()-5, self.data["y"].max()+5,
                              self.data["z"].min()-5, self.data["z"].max()+5],
                             index = ["xm", "xM", "ym", "yM", "zm", "zM"],
                             dtype = "float")
+        else :
+            lim = pd.Series(limits, 
+                            index = ["xm", "xM", "ym", "yM", "zm", "zM"],
+                            dtype = "float")
         
+        # Extracting the points at the given timepoints.
         data = self.data[self.data["tp"] == TP]
         
+        # Keeping the wanted tracks.
         if tracks != "all":
             data = data[data["track"].isin(tracks)]
         
-        fig = plt.figure()
-        ax = fig.add_subplot(projection='3d')
+        # Scatter plotting the data.
         ax.scatter(data["x"], data["y"], data["z"])
+        
+        # Setting axis labels.
         ax.set_xlabel('X')
         ax.set_ylabel('Y')
         ax.set_zlabel('Z')
         
+        # Setting the axis' limits. 
+        ax.set_xlim3d([lim["xm"], lim["xM"]])
+        ax.set_ylim3d([lim["ym"], lim["yM"]])
+        ax.set_zlim3d([lim["zm"], lim["zM"]])
+        
+        plt.show()
+        plt.close()
+        
+    def showPath(self, track = "all", limits = None):
+        """
+        Show the path that the given track(s) are taking in 3D.
+
+        Parameters
+        ----------
+        track : float, int or list, optional
+            ID of the track(s) to show. The default is "all".
+        limits : list, optional
+            List of the limits. The default is None.
+            Format : [x_min, x_max, y_min, y_max, z_min, z_max]
+
+        """
+        
+        # Creating the figure and the axes.
+        fig = plt.figure()
+        ax = fig.add_subplot(projection='3d')
+        
+        # Setting the iteration through track if more than one.
+        if track == "all":
+            track = list(self.data["track"].value_counts(ascending = True))
+        elif type(track) in [float, int]:
+            track = [track]
+        
+        # Setting the limits of the figure.
+        if limits == None:
+            lim = pd.Series([self.data["x"].min()-5, self.data["x"].max()+5,
+                             self.data["y"].min()-5, self.data["y"].max()+5,
+                             self.data["z"].min()-5, self.data["z"].max()+5],
+                            index = ["xm", "xM", "ym", "yM", "zm", "zM"],
+                            dtype = "float")
+        else :
+            lim = pd.Series(limits, 
+                            index = ["xm", "xM", "ym", "yM", "zm", "zM"],
+                            dtype = "float")
+        
+        # Getting the data and plotting tracks one by one.
+        for trackID in track :
+            data = self.data[self.data["track"] == trackID]
+            ax.plot(data["x"], data["y"], data["z"])
+        
+        # Setting axis labels.
+        ax.set_xlabel('X')
+        ax.set_ylabel('Y')
+        ax.set_zlabel('Z')
+        
+        # Setting the axis' limits. 
         ax.set_xlim3d([lim["xm"], lim["xM"]])
         ax.set_ylim3d([lim["ym"], lim["yM"]])
         ax.set_zlim3d([lim["zm"], lim["zM"]])
@@ -192,14 +304,31 @@ class SDG():
         plt.show()
         plt.close()
         
+        
     def exportCSV(self, savepath, OAT = True):
         if OAT :
             data = self.data.copy()
-            data.rename(columns = {"track" : "TRACK_ID", "x": "X", "y":"Y", 
-                                   "z" : "Z", "tp": "EDGE_TIME", 
-                                   "target": "TARGET"}, 
+            data["ID"] = data.index
+            emptyRows = pd.DataFrame([[-1]*len(data.columns) 
+                                      for row in range(3)],
+                                     columns = data.columns,
+                                     dtype = "int")
+            data = pd.concat([emptyRows, data])
+            data["FRAME"] = data["tp"]
+            data["QUALITY"] = [0]*data.shape[0]
+            data.rename(columns = {"track" : "TRACK_ID", "x": "POSITION_X", 
+                                   "y":"POSITION_Y", "z" : "POSITION_Z", 
+                                   "tp": "POSITION_T", 
+                                   "target": "SPOT_TARGET_ID"}, 
                         inplace = True)
-            data.to_csv(savepath)
+            tracks = data.drop(columns = "SPOT_TARGET_ID")
+            tracks.to_csv(savepath+"\\tracks.csv")
+            data.rename(columns = {"ID": "SPOT_SOURCE_ID"}, inplace = True)
+            edges = data.loc[:,["SPOT_TARGET_ID", "SPOT_SOURCE_ID"]]
+            edges.dropna(inplace = True)
+            edges.to_csv(savepath+"\\edges.csv")
+            return None
+        self.data.to_csv(savepath)
         
 if __name__ == "__main__":
     t = SDG()
