@@ -4,7 +4,7 @@ SDG (Synthetic Data Generator) class allows you to create data to try your
 scripts.
 
 @author: Alex-932
-@version : 0.2.3
+@version : 0.2.4
 """
 
 import numpy as np
@@ -25,7 +25,7 @@ class SDG():
         self.objectTable = pd.DataFrame(columns = ["tp", "type", 
                                                    "origin", "radius"],
                                         dtype = "object")
-        self.version = "0.2.3"
+        self.version = "0.2.4"
         
     def toCartesian(radius, azimuth, elevation, origin = None):
         """
@@ -85,6 +85,31 @@ class SDG():
         
     def addSphere(self, tp = 0, origin = [0, 0, 0], radius = 10, track = None, 
                   samples = 1000):
+        """
+        Add a Fibonacci sphere at the given coordinates.
+
+        Parameters
+        ----------
+        tp : int, optional
+            Time point (or frame) the sphere will be added in. The default is 0.
+        origin : list, optional
+            Coordinates of the center of the sphere. The default is [0, 0, 0].
+            Format : [X, Y, Z]
+        radius : float, optional
+            Radius of the sphere. The default is 10.
+        track : int, optional
+            Starting track ID. The default is None.
+            Each point has its trackID and this parameters set the first one.
+            Used with the addRotatingSphere() method.
+        samples : int, optional
+            Number of points in the sphere. The default is 1000.
+            
+        Return
+        ------
+        
+        Update self.data with the new points.
+
+        """
         
         if track == None:
             track = self.track
@@ -126,6 +151,34 @@ class SDG():
         
     def addRotatingSphere(self, origin = [0, 0, 0], radius = 10, nframe = 20, 
                        sample = 1000, tp = 0, azimuth = 15, elevation = 0):
+        """
+        Add a rotating sphere in the volume. The sphere rotate by offsetting 
+        the points by {azimuth}° azimuth and {elevation}° elevation between 
+        each frames.
+
+        Parameters
+        ----------
+        origin : list, optional
+            Coordinates of the center of the sphere. The default is [0, 0, 0].
+            Format : [X, Y, Z]
+        radius : float, optional
+            Radius of the sphere. The default is 10.
+        nframe : int, optional
+            Number of frames in which the sphere is. The default is 20.
+        sample : int, optional
+            Number of points in the sphere. The default is 1000.
+        tp : int, optional
+            Starting time point. The default is 0.
+        azimuth : float, optional
+            Azimuth angle increment in degree. The default is 15.
+        elevation : float, optional
+            Elevation angle increment in degree. The default is 0.
+
+        Returns
+        -------
+        Update self.data.
+
+        """
         
         # Saving the first track ID and creating the first sphere.
         track = self.track
@@ -305,7 +358,19 @@ class SDG():
         plt.close()
         
         
-    def exportCSV(self, savepath, OAT = True):
+    def exportCSV(self, savepath, OAT = False):
+        """
+        Save self.data as a .csv in savepath.
+
+        Parameters
+        ----------
+        savepath : str
+            Path and filename of the output file.
+        OAT : bool, optional
+            If True, save the dataset to be imported within OAT. 
+            The default is False.
+
+        """
         if OAT :
             data = self.data.copy()
             data["ID"] = data.index
