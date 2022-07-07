@@ -148,7 +148,7 @@ class SDG():
         self.data = pd.concat([self.data, points], ignore_index = True)
         self.objectID += 1
         self.track = max([track+1, self.track])
-        
+                
     def addRotatingSphere(self, origin = [0, 0, 0], radius = 10, nframe = 20, 
                        sample = 1000, tp = 0, azimuth = 15, elevation = 0):
         """
@@ -194,20 +194,18 @@ class SDG():
             # Temporarily saving the objectID the sphere will have.
             objID = self.objectID
             
-            # Creating the sphere at the correct time point.
-            self.addSphere(frame+tp, origin, radius, track, sample)
-            
             # Getting the IDs of the current sphere's first point and previous
             # sphere's first point.
-            pointsID = self.data[self.data["objID"] == objID].index
             prevID = self.data[self.data["objID"] == objID-1].index
+            newID = prevID+sample
             
             # Adding the ID of the current sphere's spots to the previous 
             # sphere's spots. That way we establish a link.  
-            self.data.loc[prevID, "target"] = list(pointsID.astype("int"))
+            self.data.loc[prevID, "target"] = list(newID)
+            track = 0
             
             # Iterating through the points of the current sphere.
-            for point in pointsID:
+            for point in prevID:
                 
                 # Getting the cartesian coordinates.
                 cvalues = self.data.loc[point]
@@ -217,12 +215,20 @@ class SDG():
                                 cvalues["z"], origin))
                 
                 # Adding the angle displacement.
-                svalues[1] += frame*azimuth
-                svalues[2] += frame*elevation
+                if svalues[1] < (3/2)*np.pi and svalues[1] > (1/2)*np.pi:
+                    svalues[2] -= elevation
+                else :
+                    svalues[2] += elevation
+                svalues[1] += azimuth
                 
                 # Converting them back and saving them in the data dataframe.
-                self.data.loc[point, ["x", "y", "z"]] = list(SDG.toCartesian(
-                    svalues[0], svalues[1], svalues[2], origin))
+                self.data.loc[point+sample] = list(SDG.toCartesian(
+                    svalues[0], svalues[1], svalues[2], origin))+\
+                    [frame, track, objID, np.nan]
+                
+                track += 1
+            
+            self.objectID += 1
                 
     def fakeTif(self, savepath):
         TP = self.data["tp"].value_counts(ascending = True).index
