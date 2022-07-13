@@ -4,7 +4,7 @@ SDG (Synthetic Data Generator) class allows you to create data to try your
 scripts.
 
 @author: Alex-932
-@version : 0.2.4
+@version : 0.2.5
 """
 
 import numpy as np
@@ -25,7 +25,7 @@ class SDG():
         self.objectTable = pd.DataFrame(columns = ["tp", "type", 
                                                    "origin", "radius"],
                                         dtype = "object")
-        self.version = "0.2.4"
+        self.version = "0.2.5"
         
     def toCartesian(radius, azimuth, elevation, origin = None):
         """
@@ -150,7 +150,8 @@ class SDG():
         self.track = max([track+1, self.track])
                 
     def addRotatingSphere(self, origin = [0, 0, 0], radius = 10, nframe = 20, 
-                       sample = 1000, tp = 0, azimuth = 15, elevation = 0):
+                          sample = 1000, tp = 0, 
+                          theta_x = 15, theta_y = 0, theta_z = 0):
         """
         Add a rotating sphere in the volume. The sphere rotate by offsetting 
         the points by {azimuth}° azimuth and {elevation}° elevation between 
@@ -169,10 +170,12 @@ class SDG():
             Number of points in the sphere. The default is 1000.
         tp : int, optional
             Starting time point. The default is 0.
-        azimuth : float, optional
-            Azimuth angle increment in degree. The default is 15.
-        elevation : float, optional
-            Elevation angle increment in degree. The default is 0.
+        theta_x : float, optional
+            X angle increment in degree. The default is 15.
+        theta_y : float, optional
+            Y angle increment in degree. The default is 0.
+        theta_z : float, optional
+            Z angle increment in degree. The default is 0.
 
         Returns
         -------
@@ -185,8 +188,9 @@ class SDG():
         self.addSphere(tp, origin, radius, track, sample)
         
         # Converting degree to radian
-        azimuth = azimuth*np.pi/180
-        elevation = elevation*np.pi/180
+        theta_x = theta_x*np.pi/180
+        theta_y = theta_y*np.pi/180
+        theta_z = theta_z*np.pi/180
         
         # Creating as much sphere as asked with nframe.
         for frame in range(1, nframe):
@@ -202,31 +206,40 @@ class SDG():
             # Adding the ID of the current sphere's spots to the previous 
             # sphere's spots. That way we establish a link.  
             self.data.loc[prevID, "target"] = list(newID)
-            track = 0
+            itrack = track
             
             # Iterating through the points of the current sphere.
             for point in prevID:
                 
                 # Getting the cartesian coordinates.
-                cvalues = self.data.loc[point]
+                cvalues = self.data.loc[point, ["x", "y", "z"]].copy()
                 
-                # Converting them to spherical.
-                svalues = list(SDG.toSpherical(cvalues["x"], cvalues["y"], 
-                                cvalues["z"], origin))
+                # Applying X rotation
+                tempy = cvalues["y"].copy()
+                cvalues["y"] = cvalues["y"]*np.cos(theta_x)-\
+                    cvalues["z"]*np.sin(theta_x)
+                cvalues["z"] = tempy*np.sin(theta_x)+\
+                    cvalues["z"]*np.cos(theta_x)
                 
-                # Adding the angle displacement.
-                if svalues[1] < (3/2)*np.pi and svalues[1] > (1/2)*np.pi:
-                    svalues[2] -= elevation
-                else :
-                    svalues[2] += elevation
-                svalues[1] += azimuth
+                # Applying Y rotation
+                tempx = cvalues["x"].copy()
+                cvalues["x"] = cvalues["x"]*np.cos(theta_y)+\
+                    cvalues["z"]*np.sin(theta_y)
+                cvalues["z"] = -tempx*np.sin(theta_y)+\
+                    cvalues["z"]*np.cos(theta_y)
+                    
+                # Applying Z rotation
+                tempx = cvalues["x"].copy()
+                cvalues["x"] = cvalues["x"]*np.cos(theta_z)-\
+                    cvalues["y"]*np.sin(theta_z)
+                cvalues["y"] = tempx*np.sin(theta_z)+\
+                    cvalues["y"]*np.cos(theta_z)
                 
                 # Converting them back and saving them in the data dataframe.
-                self.data.loc[point+sample] = list(SDG.toCartesian(
-                    svalues[0], svalues[1], svalues[2], origin))+\
-                    [frame, track, objID, np.nan]
+                self.data.loc[point+sample] = list(cvalues)+\
+                    [frame, itrack, objID, np.nan]
                 
-                track += 1
+                itrack += 1
             
             self.objectID += 1
                 
@@ -371,7 +384,7 @@ class SDG():
         Parameters
         ----------
         savepath : str
-            Path and filename of the output file.
+            Path of the output file.
         OAT : bool, optional
             If True, save the dataset to be imported within OAT. 
             The default is False.
