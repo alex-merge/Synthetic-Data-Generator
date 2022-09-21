@@ -12,6 +12,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import tifffile
 from scipy.ndimage.filters import gaussian_filter
+import random
 
 class SDG():
     
@@ -26,7 +27,7 @@ class SDG():
         self.objectTable = pd.DataFrame(columns = ["tp", "type", 
                                                    "origin", "radius"],
                                         dtype = "object")
-        self.version = "0.2.5"
+        self.version = "0.2.6"
         
     def toCartesian(radius, azimuth, elevation, origin = None):
         """
@@ -154,7 +155,8 @@ class SDG():
                 
     def addRotatingSphere(self, origin = [0, 0, 0], radius = 10, nframe = 20, 
                           sample = 1000, tp = 0, 
-                          theta_x = 15, theta_y = 0, theta_z = 0):
+                          theta_x = 15, theta_y = 0, theta_z = 0,
+                          variation = True, variation_range = 0.1):
         """
         Add a rotating sphere in the volume. The sphere rotate by offsetting 
         the points by {azimuth}° azimuth and {elevation}° elevation between 
@@ -198,7 +200,7 @@ class SDG():
         
         # Creating as much sphere as asked with nframe.
         for frame in range(1, nframe):
-            
+            print(frame)
             # Temporarily saving the objectID the sphere will have.
             objID = self.objectID
             
@@ -223,26 +225,34 @@ class SDG():
                 cvalues["y"] -= origin[1]
                 cvalues["z"] -= origin[2]
                 
+                ## Modifying the angles if set to do so
+                if variation:
+                    t_x = theta_x + random.randrange(-9, 10)/10*variation_range
+                    t_y = theta_y + random.randrange(-9, 10)/10*variation_range
+                    t_z = theta_z + random.randrange(-9, 10)/10*variation_range
+                else :
+                    t_x, t_y, t_z = theta_x, theta_y, theta_z
+                    
                 # Applying X rotation
                 tempy = cvalues["y"].copy()
-                cvalues["y"] = cvalues["y"]*np.cos(theta_x)-\
-                    cvalues["z"]*np.sin(theta_x)
-                cvalues["z"] = tempy*np.sin(theta_x)+\
-                    cvalues["z"]*np.cos(theta_x)
+                cvalues["y"] = cvalues["y"]*np.cos(t_x)-\
+                    cvalues["z"]*np.sin(t_x)
+                cvalues["z"] = tempy*np.sin(t_x)+\
+                    cvalues["z"]*np.cos(t_x)
                 
                 # Applying Y rotation
                 tempx = cvalues["x"].copy()
-                cvalues["x"] = cvalues["x"]*np.cos(theta_y)+\
-                    cvalues["z"]*np.sin(theta_y)
-                cvalues["z"] = -tempx*np.sin(theta_y)+\
-                    cvalues["z"]*np.cos(theta_y)
+                cvalues["x"] = cvalues["x"]*np.cos(t_y)+\
+                    cvalues["z"]*np.sin(t_y)
+                cvalues["z"] = -tempx*np.sin(t_y)+\
+                    cvalues["z"]*np.cos(t_y)
                     
                 # Applying Z rotation
                 tempx = cvalues["x"].copy()
-                cvalues["x"] = cvalues["x"]*np.cos(theta_z)-\
-                    cvalues["y"]*np.sin(theta_z)
-                cvalues["y"] = tempx*np.sin(theta_z)+\
-                    cvalues["y"]*np.cos(theta_z)
+                cvalues["x"] = cvalues["x"]*np.cos(t_z)-\
+                    cvalues["y"]*np.sin(t_z)
+                cvalues["y"] = tempx*np.sin(t_z)+\
+                    cvalues["y"]*np.cos(t_z)
                     
                 # Readding the offset from the centroid to [0, 0, 0].
                 cvalues["x"] += origin[0]
@@ -549,10 +559,7 @@ class SDG():
             The default is False.
 
         """
-        if OAT :
-            tracksDir = savepath+'\\data\\tracks\\'
-            tifDir = savepath+'\\data\\organoid_images\\'
-            
+        if OAT :            
             data = self.data.copy()
             data["ID"] = data.index
             
@@ -572,13 +579,13 @@ class SDG():
                         inplace = True)
             
             tracks = data.drop(columns = "SPOT_TARGET_ID")
-            tracks.to_csv(tracksDir+"tracks.csv")
+            tracks.to_csv(savepath+"\\tracks.csv")
             
             data.rename(columns = {"ID": "SPOT_SOURCE_ID"}, inplace = True)
             
             edges = data.loc[:,["SPOT_TARGET_ID", "SPOT_SOURCE_ID"]]
             edges.dropna(inplace = True)
-            edges.to_csv(tracksDir+"edges.csv")
+            edges.to_csv(savepath+"\\edges.csv")
             
         else :
             self.data.to_csv(savepath)
